@@ -745,6 +745,10 @@ public class BCrypt {
 	 * @return	the hashed password
 	 */
 	public static String hashpw(byte passwordb[], String salt) {
+		return hashpw(passwordb, salt, false);
+	}
+
+	private static String hashpw(byte passwordb[], String salt, boolean for_check) {
 		BCrypt B;
 		String real_salt;
 		byte saltb[], hashed[];
@@ -752,6 +756,10 @@ public class BCrypt {
 		int rounds, off;
 		StringBuilder rs = new StringBuilder();
 
+		// Enforce max length for new passwords only
+		if (!for_check && passwordb.length > 72) {
+			throw new IllegalArgumentException("password cannot be more than 72 bytes");
+		}
 		if (salt == null) {
 			throw new IllegalArgumentException("salt cannot be null");
 		}
@@ -905,7 +913,8 @@ public class BCrypt {
 	 * @return	true if the passwords match, false otherwise
 	 */
 	public static boolean checkpw(String plaintext, String hashed) {
-		return equalsNoEarlyReturn(hashed, hashpw(plaintext, hashed));
+		byte[] passwordb = plaintext.getBytes(StandardCharsets.UTF_8);
+		return equalsNoEarlyReturn(hashed, hashpw(passwordb, hashed, true));
 	}
 
 	/**
@@ -917,7 +926,7 @@ public class BCrypt {
 	 * @since 5.3
 	 */
 	public static boolean checkpw(byte[] passwordb, String hashed) {
-		return equalsNoEarlyReturn(hashed, hashpw(passwordb, hashed));
+		return equalsNoEarlyReturn(hashed, hashpw(passwordb, hashed, true));
 	}
 
 	static boolean equalsNoEarlyReturn(String a, String b) {

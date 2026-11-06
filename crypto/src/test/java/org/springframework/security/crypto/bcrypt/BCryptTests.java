@@ -17,11 +17,13 @@ package org.springframework.security.crypto.bcrypt;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 /**
  * JUnit unit tests for BCrypt routines
@@ -442,6 +444,51 @@ public class BCryptTests {
 	@Test(expected = IllegalArgumentException.class)
 	public void hashpwFailsWhenSaltIsTooShort() {
 		BCrypt.hashpw("password", "$2a$10$123456789012345678901");
+	}
+
+	@Test
+	public void hashpwWhenPasswordOverMaxLengthThenThrowIllegalArgumentException() {
+		String password72chars = "123456789012345678901234567890123456789012345678901234567890123456789012";
+		String salt = BCrypt.gensalt(4);
+		assertThat(BCrypt.hashpw(password72chars, salt)).isNotNull();
+		assertThat(BCrypt.hashpw(password72chars.getBytes(StandardCharsets.UTF_8), salt)).isNotNull();
+
+		String password73chars = password72chars + "3";
+		assertThatIllegalArgumentException().isThrownBy(() -> BCrypt.hashpw(password73chars, salt))
+				.withMessage("password cannot be more than 72 bytes");
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> BCrypt.hashpw(password73chars.getBytes(StandardCharsets.UTF_8), salt))
+				.withMessage("password cannot be more than 72 bytes");
+	}
+
+	@Test
+	public void hashpwWhenMultiByteCharactersOverMaxByteLengthThenThrowIllegalArgumentException() {
+		// 37 two-byte UTF-8 characters = 74 bytes, although only 37 characters
+		StringBuilder password = new StringBuilder();
+		for (int i = 0; i < 37; i++) {
+			password.append('é');
+		}
+		String salt = BCrypt.gensalt(4);
+		assertThatIllegalArgumentException().isThrownBy(() -> BCrypt.hashpw(password.toString(), salt));
+	}
+
+	@Test
+	public void hashpwWhenPasswordsShareFirst72BytesThenCannotBeEncoded() {
+		// bcrypt only uses the first 72 bytes: two different passwords sharing that
+		// prefix would otherwise produce the same hash and match each other.
+		String prefix = "123456789012345678901234567890123456789012345678901234567890123456789012";
+		String salt = BCrypt.gensalt(4);
+		assertThatIllegalArgumentException().isThrownBy(() -> BCrypt.hashpw(prefix + "victim-secret", salt));
+		assertThatIllegalArgumentException().isThrownBy(() -> BCrypt.hashpw(prefix + "attacker-guess", salt));
+	}
+
+	@Test
+	public void checkpwWhenPasswordOverMaxLengthThenAllowToMatch() {
+		String password73chars = "1234567890123456789012345678901234567890123456789012345678901234567890123";
+		String encodedPassword73chars = "$2a$10$1l9.kvQTsqNLiCYFqmKtQOHkp.BrgIrwsnTzWo9jdbQRbuBYQ/AVK";
+		assertThat(BCrypt.checkpw(password73chars, encodedPassword73chars)).isTrue();
+		assertThat(BCrypt.checkpw(password73chars.getBytes(StandardCharsets.UTF_8), encodedPassword73chars))
+				.isTrue();
 	}
 
 	@Test
