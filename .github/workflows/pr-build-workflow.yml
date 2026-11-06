@@ -1,11 +1,18 @@
 name: PR Build
 
-on: pull_request
+on:
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: 'Gradle test task + --tests selector to run instead of the full crypto build'
+        required: false
+        default: ''
 
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v2
@@ -14,9 +21,37 @@ jobs:
         with:
           java-version: '8'
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
+      - name: Enable test result logging
+        run: |
+          cat > "$RUNNER_TEMP/test-logging.gradle" <<'EOF'
+          allprojects {
+            tasks.withType(Test) { t ->
+              t.testLogging {
+                events "passed", "skipped", "failed"
+                exceptionFormat "full"
+              }
+              t.afterSuite { desc, result ->
+                if (desc.parent == null) {
+                  println "TEST SUMMARY ${t.path}: ${result.resultType} - ${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped"
+                }
+              }
+            }
+          }
+          EOF
       - name: Build with Gradle
-        run: ./gradlew clean build --continue
+        run: |
+          if [ -n "${{ inputs.test-filter }}" ]; then
+            ./gradlew -I "$RUNNER_TEMP/test-logging.gradle" clean :spring-security-crypto:assemble ${{ inputs.test-filter }}
+          else
+            ./gradlew -I "$RUNNER_TEMP/test-logging.gradle" clean :spring-security-crypto:build --continue
+          fi
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spring-security-crypto
+          path: crypto/build/libs/spring-security-crypto-5.3.5.RELEASE.jar
+          if-no-files-found: error

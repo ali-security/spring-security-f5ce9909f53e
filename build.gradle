@@ -7,7 +7,7 @@ buildscript {
 		classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
 	}
 	repositories {
-		maven { url 'https://repo.spring.io/plugins-snapshot' }
+		maven { url 'https://repo.huaweicloud.com/repository/maven' }
 		maven { url 'https://plugins.gradle.org/m2/' }
 	}
 }
@@ -15,6 +15,13 @@ buildscript {
 apply plugin: 'io.spring.nohttp'
 apply plugin: 'locks'
 apply plugin: 'io.spring.convention.root'
+allprojects {
+	repositories.all { repo ->
+		if (repo instanceof MavenArtifactRepository && repo.url.toString().contains('repo.spring.io')) {
+			repo.url = 'https://repo.maven.apache.org/maven2/'
+		}
+	}
+}
 apply plugin: 'org.jetbrains.kotlin.jvm'
 
 group = 'org.springframework.security'
